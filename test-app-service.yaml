@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-app-service
+spec:
+  selector:
+    app: node-app
+  ports:
+    - port: 3100
+      targetPort: 3100
+      nodePort: 30010
+  type: NodePort # ClusterIP ( Use this for internet access)
