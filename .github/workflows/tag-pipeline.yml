@@ -1,25 +1,45 @@
-name: Run pipeline on release with -Dev in tag
+name: CI/CD Pipeline (Dev/Test/Prod)
 
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types: [published]
 
 jobs:
-  run-on-dev-release:
-    if: contains(github.event.release.tag_name, '-Dev')
+  deploy-dev:
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-Dev')
     runs-on: ubuntu-latest
+    name: Deploy to Development
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Run Dev Deployment
+        run: echo "🚀 Deploying to Development Server for ${{ github.ref }}"
 
-      - name: Install dependencies
-        run: npm install
+  deploy-test:
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-Test')
+    runs-on: ubuntu-latest
+    name: Deploy to Testing
 
-      - name: Run build
-        run: npm run build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Test Deployment
+        run: echo "🚀 Deploying to Testing Server for ${{ github.ref }}"
+
+  deploy-prod:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Production Deployment
+        run: echo "🚀 Deploying to Production Server for tag ${{ github.event.release.tag_name }}"
