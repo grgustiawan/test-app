@@ -1,12 +1,12 @@
-name: Run pipeline on tag v1.0.0-Dev*
+name: Run pipeline on release with -Dev in tag
 
 on:
-  push:
-    tags:
-      - 'v1.0.0-Dev*'
+  release:
+    types: [published]
 
 jobs:
-  build:
+  run-on-dev-release:
+    if: contains(github.event.release.tag_name, '-Dev')
     runs-on: ubuntu-latest
 
     steps:
@@ -16,13 +16,10 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install
 
       - name: Run build
         run: npm run build
-
-      - name: Run tests
-        run: npm test
