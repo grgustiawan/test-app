@@ -79,7 +79,7 @@ jobs:
     if: needs.codeql.outputs.fatal_count != '0' || needs.eslint.outputs.eslint_failed == 'true'
     permissions:
       contents: write
-
+ 
     steps:
       - name: Checkout repo with write access
         uses: actions/checkout@v3
