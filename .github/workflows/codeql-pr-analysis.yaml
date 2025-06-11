@@ -1,0 +1,45 @@
+name: "CodeQL PR Scan"
+
+on:
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  codeql:
+    name: Analyze Pull Request with CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: typescript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Fail PR if vulnerabilities found
+        run: |
+          echo "Checking for critical/high vulnerabilities in PR..."
+          ALERTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
+
+          FATAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.rule.severity == "high" or .rule.severity == "critical")] | length')
+
+          if [ "$FATAL_COUNT" -gt 0 ]; then
+            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities."
+            exit 1
+          else
+            echo "✅ No fatal vulnerabilities found."
+          fi

@@ -1,0 +1,50 @@
+name: "CodeQL Push Scan & Revert"
+
+on:
+  push:
+    branches: [dev, main]
+
+jobs:
+  codeql:
+    name: Scan Push with CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: typescript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Revert commit if fatal vulnerabilities found
+        run: |
+          echo "Checking for critical/high vulnerabilities..."
+          ALERTS=$(curl -s -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
+
+          FATAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.rule.severity == "high" or .rule.severity == "critical")] | length')
+
+          if [ "$FATAL_COUNT" -gt 0 ]; then
+            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities. Reverting..."
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git revert --no-edit HEAD
+            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} HEAD:${{ github.ref_name }}
+            echo "🔁 Commit reverted."
+          else
+            echo "✅ No fatal vulnerabilities found."
+          fi
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
