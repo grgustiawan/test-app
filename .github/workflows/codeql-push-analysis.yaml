@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: write
 
+    outputs:
+      eslint_failed: ${{ steps.eslint.outcome != 'success' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -30,10 +33,6 @@ jobs:
           npx eslint . --ext .ts,.tsx,.js,.jsx
         continue-on-error: true
 
-      - name: Save ESLint status
-        run: |
-          echo "ESLINT_FAILED=${{ steps.eslint.outcome != 'success' }}" >> $GITHUB_ENV
-
   codeql:
     name: CodeQL Scan
     runs-on: ubuntu-latest
@@ -41,6 +40,9 @@ jobs:
     permissions:
       contents: write
       security-events: write
+
+    outputs:
+      fatal_count: ${{ steps.check_vuln.outputs.fatal_count }}
 
     steps:
       - name: Checkout repository
@@ -66,13 +68,7 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
 
           FATAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.rule.severity == "high" or .rule.severity == "critical")] | length')
-          echo "FATAL_COUNT=$FATAL_COUNT" >> $GITHUB_ENV
-
-          if [ "$FATAL_COUNT" -gt 0 ]; then
-            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities."
-          else
-            echo "✅ No fatal vulnerabilities found."
-          fi
+          echo "fatal_count=$FATAL_COUNT" >> $GITHUB_OUTPUT
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
 
@@ -80,7 +76,7 @@ jobs:
     name: Revert Commit on Error
     runs-on: ubuntu-latest
     needs: [eslint, codeql]
-    if: ${{ env.FATAL_COUNT != '0' || env.ESLINT_FAILED == 'true' }}
+    if: needs.codeql.outputs.fatal_count != '0' || needs.eslint.outputs.eslint_failed == 'true'
     permissions:
       contents: write
 
