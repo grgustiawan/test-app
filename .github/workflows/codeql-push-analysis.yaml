@@ -1,16 +1,15 @@
-name: "CodeQL Push Scan & Revert"
+name: "CodeQL + ESLint Push Scan & Revert"
 
 on:
   push:
     branches: [dev, main]
 
 jobs:
-  codeql:
-    name: Scan Push with CodeQL + ESLint
+  eslint:
+    name: ESLint Analysis
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      security-events: write
 
     steps:
       - name: Checkout repository
@@ -25,8 +24,27 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npx eslint . --ext .ts,.tsx,.js,.jsx
-        continue-on-error: false
+        id: eslint
+        run: |
+          echo "🔍 Running ESLint..."
+          npx eslint . --ext .ts,.tsx,.js,.jsx
+        continue-on-error: true
+
+      - name: Save ESLint status
+        run: |
+          echo "ESLINT_FAILED=${{ steps.eslint.outcome != 'success' }}" >> $GITHUB_ENV
+
+  codeql:
+    name: CodeQL Scan
+    runs-on: ubuntu-latest
+    needs: eslint
+    permissions:
+      contents: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -39,24 +57,45 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-      - name: Revert commit if fatal vulnerabilities found
+      - name: Check for fatal CodeQL vulnerabilities
+        id: check_vuln
         run: |
-          echo "Checking for critical/high vulnerabilities..."
+          echo "🔍 Checking for CodeQL alerts..."
           ALERTS=$(curl -s -H "Authorization: Bearer $GH_PAT" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
 
           FATAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.rule.severity == "high" or .rule.severity == "critical")] | length')
+          echo "FATAL_COUNT=$FATAL_COUNT" >> $GITHUB_ENV
 
           if [ "$FATAL_COUNT" -gt 0 ]; then
-            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities. Reverting..."
-            git config user.name "github-actions"
-            git config user.email "github-actions@users.noreply.github.com"
-            git revert --no-edit HEAD
-            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} HEAD:${{ github.ref_name }}
-            echo "🔁 Commit reverted."
+            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities."
           else
             echo "✅ No fatal vulnerabilities found."
           fi
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+
+  revert:
+    name: Revert Commit on Error
+    runs-on: ubuntu-latest
+    needs: [eslint, codeql]
+    if: ${{ env.FATAL_COUNT != '0' || env.ESLINT_FAILED == 'true' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo with write access
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Revert latest commit
+        run: |
+          echo "⚠ Reverting latest commit due to ESLint or CodeQL failure..."
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git revert --no-edit HEAD
+          git push origin HEAD:${{ github.ref_name }}
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
