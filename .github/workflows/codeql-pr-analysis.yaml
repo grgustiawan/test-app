@@ -27,7 +27,7 @@ jobs:
 
       - name: Run ESLint
         run: npx eslint . --ext .ts,.tsx,.js,.jsx
-        continue-on-error: false
+        continue-on-error: false 
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -40,17 +40,20 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-      - name: Fail PR if vulnerabilities found
+      - name: Fail PR if high/critical vulnerabilities found
         run: |
-          echo "Checking for critical/high vulnerabilities in PR..."
+          echo "Checking for high/critical vulnerabilities..."
+
           ALERTS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
 
           FATAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.rule.severity == "high" or .rule.severity == "critical")] | length')
 
+          echo "Detected $FATAL_COUNT high/critical vulnerabilities."
+
           if [ "$FATAL_COUNT" -gt 0 ]; then
-            echo "❌ Found $FATAL_COUNT high/critical vulnerabilities."
+            echo "❌ PR rejected due to $FATAL_COUNT vulnerabilities."
             exit 1
           else
             echo "✅ No fatal vulnerabilities found."
