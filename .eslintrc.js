@@ -1,3 +1,4 @@
+// .eslintrc.js
 module.exports = {
   root: true,
   parser: '@typescript-eslint/parser',
@@ -18,4 +19,15 @@ module.exports = {
     'no-unused-vars': 'warn',
     'no-console': 'off',
   },
+  overrides: [
+    {
+      files: ['.eslintrc.js', 'index.js'],
+      parserOptions: {
+        sourceType: 'script',
+      },
+      env: {
+        node: true,
+      },
+    },
+  ],
 };
