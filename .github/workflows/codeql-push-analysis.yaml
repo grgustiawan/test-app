@@ -78,23 +78,35 @@ jobs:
   revert:
     name: Revert Commit on Error
     runs-on: ubuntu-latest
-    needs: [eslint, codeql]
-    if: needs.codeql.outputs.fatal_count != '0' || needs.eslint.outputs.eslint_failed == 'true'
-    permissions:
-      contents: write
+    needs: test
+    if: failure() 
 
     steps:
-      - name: Checkout repo with write access
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Revert latest commit
+      - name: Configure Git
         run: |
-          echo "⚠ Reverting latest commit due to ESLint or CodeQL failure..."
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git revert --no-edit HEAD
-          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Get last commit SHA
+        id: last_commit
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Revert last commit
+        run: |
+          git revert --no-commit ${{ steps.last_commit.outputs.sha }}
+
+          # Jika perlu mengecualikan file penting agar tidak ikut di-revert
+          # Misalnya: README.md, .gitignore, atau file config tertentu
+          git restore --staged README.md || true
+          git restore --staged .gitignore || true
+
+          git commit -m "Revert \"${{ github.event.head_commit.message }}\" due to workflow failure"
+          git push
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
